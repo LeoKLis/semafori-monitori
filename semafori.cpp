@@ -1,6 +1,4 @@
-// Ulazi, izlazi i sve funkcije su relativne za tipove dretvi
-// Ako je dretva ulazna, onda je ulazni_meduspr = null, a izlazni je ulazni_meduspremnik
-// Ako je dretva radna, onda je ulazni_meduspr - ulazni_meduspremnik[i], a izlazni je izlazni_meduspremnik
+// Ulazi i izlazi su apsolutni za sve vrijednosti!! Ne vise relativni
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,6 +6,14 @@
 #include <unistd.h>
 #include <memory>
 #include <semaphore.h>
+
+#define ANSI_COLOR_RED     "\x1b[31m"
+#define ANSI_COLOR_GREEN   "\x1b[32m"
+#define ANSI_COLOR_YELLOW  "\x1b[33m"
+#define ANSI_COLOR_BLUE    "\x1b[34m"
+#define ANSI_COLOR_MAGENTA "\x1b[35m"
+#define ANSI_COLOR_CYAN    "\x1b[36m"
+#define ANSI_COLOR_RESET   "\x1b[0m"
 
 int ulazni_meduspr_br;
 int izlazni_meduspr_br;
@@ -18,10 +24,11 @@ class Meduspremnik
 private:
     int velicina;
     int pisi_ptr, citaj_ptr;
-    char *polje;
+    char *polje = (char*) malloc(1);
 
 public:
-    Meduspremnik(int velicina)
+    Meduspremnik(){}
+    /* Meduspremnik(int velicina)
     {
         this->velicina = velicina;
         pisi_ptr = citaj_ptr = -1;
@@ -30,7 +37,17 @@ public:
         {
             polje[i] = 45;
         }
-        
+    } */
+
+    void Init(int velicina){
+        this->velicina = velicina;
+        pisi_ptr = -1; 
+        citaj_ptr = -1;
+        polje = (char*) realloc(polje, velicina);
+        for (int i = 0; i < velicina; i++)
+        {
+            polje[i] = 45;
+        }        
     }
 
     void pisi(char podatak)
@@ -44,7 +61,7 @@ public:
         else
         {
             polje[pisi_ptr] = podatak;
-            if (pisi_ptr == citaj_ptr && polje[citaj_ptr + 1] != 45)
+            if (pisi_ptr == citaj_ptr && polje[(citaj_ptr + 1) % velicina] != 45)
                 citaj_ptr = (citaj_ptr + 1) % velicina;
             pisi_ptr = (pisi_ptr + 1) % velicina;
         }
@@ -93,30 +110,34 @@ struct dretve_args {
     Meduspremnik *izlazni_meduspr;
     int dretva_id;
     int dretva_tip;
+    sem_t *ulazni_bsem;
+    sem_t *izlazni_bsem;
+    sem_t *ulazni_osem;
+    sem_t *izlazni_osem;
 };
 
 void ispis_meduspremnika(Meduspremnik *ulazni, Meduspremnik *izlazni) {
     printf("UMS: ");
     for (int i = 0; i < ulazni_meduspr_br; i++)
     {
-        ulazni->print();
+        ulazni[i].print();
         printf(" ");
     }
     printf("\n");
     printf("IMS: ");
     for (int i = 0; i < izlazni_meduspr_br; i++)
     {
-        izlazni->print();
+        izlazni[i].print();
         printf(" ");
     }
-    printf("\n");
+    printf("\n\n");
     
 }
 
 void dohvati_senzor(struct Ulaz *ulaz){
     sleep(rand() % 6 + 5);
     (*ulaz).tip = rand() % ulazni_meduspr_br;
-    (*ulaz).podatak = rand() % 26 + 97;    
+    (*ulaz).podatak = rand() % 26 + 97;
 }
 
 void obradi_ulaz(struct Ulaz *ulaz, Meduspremnik *meduspr) {
@@ -124,12 +145,14 @@ void obradi_ulaz(struct Ulaz *ulaz, Meduspremnik *meduspr) {
     (*ulaz).podatak += 1;
     (*ulaz).podatak -= 1;
     meduspr[(*ulaz).tip].pisi((*ulaz).podatak);
-    // ulazni_meduspr[(*ulaz).tip].print(); printf("\n");
 }
 
-void dohvati_ulaz(struct Ulaz *ulaz, Meduspremnik *ulazni_meduspr) {
+void dohvati_ulaz(struct Ulaz *ulaz, Meduspremnik *ulazni_meduspr, int dretva_id, int tip) {
     (*ulaz).tip = rand() % izlazni_meduspr_br;
     (*ulaz).podatak = ulazni_meduspr->citaj();
+    if((*ulaz).podatak == 23){
+        printf("Dretva id: %d, Dretva tip: %d\n", dretva_id, tip);
+    }
 }
 
 void *citaj_obradi_ulazna(void *arg) {
@@ -138,9 +161,12 @@ void *citaj_obradi_ulazna(void *arg) {
     while (1)
     {
         dohvati_senzor(&ulaz);
-        obradi_ulaz(&ulaz, wrp->izlazni_meduspr);
-        printf("Ulazna dretva %d: dohvati %c i stavi u meduspremnik %d", wrp->dretva_id, ulaz.podatak, ulaz.tip);
+        sem_wait(&wrp->ulazni_bsem[ulaz.tip]);
+        obradi_ulaz(&ulaz, wrp->ulazni_meduspr);
+        printf(ANSI_COLOR_BLUE "Ulazna dretva %d dohvaca %c i stavlja u meduspremnik %d" ANSI_COLOR_RESET "\n", wrp->dretva_id, ulaz.podatak, ulaz.tip);
         ispis_meduspremnika(wrp->ulazni_meduspr, wrp->izlazni_meduspr);
+        sem_post(&wrp->ulazni_bsem[ulaz.tip]);
+        sem_post(&wrp->ulazni_osem[ulaz.tip]);
     }
     pthread_exit(NULL);
 }
@@ -150,13 +176,19 @@ void *citaj_obradi_radna(void *arg) {
     std::unique_ptr<dretve_args> wrp( static_cast<dretve_args*>(arg) );
     while (1)
     {
-        if(!wrp->ulazni_meduspr[wrp->dretva_id].prazan()){
-            dohvati_ulaz(&ulaz, &wrp->ulazni_meduspr[wrp->dretva_id]);
-            obradi_ulaz(&ulaz, wrp->izlazni_meduspr);
-            wrp->izlazni_meduspr[ulaz.tip].pisi(ulaz.podatak);
-            printf("Radna dretva %d: dohvati %c i stavi u meduspremnik %d", wrp->dretva_id, ulaz.podatak, ulaz.tip);
-            ispis_meduspremnika(wrp->ulazni_meduspr, wrp->izlazni_meduspr);
-        }
+        sem_wait(&wrp->ulazni_osem[wrp->dretva_id]);
+        sem_wait(&wrp->ulazni_bsem[wrp->dretva_id]);
+        dohvati_ulaz(&ulaz, &wrp->ulazni_meduspr[wrp->dretva_id], wrp->dretva_id, wrp->dretva_tip);
+        printf(ANSI_COLOR_RED "Radna dretva %d dohvaca %c iz meduspremnika %d" ANSI_COLOR_RESET "\n", wrp->dretva_id, ulaz.podatak, wrp->dretva_id);
+        ispis_meduspremnika(wrp->ulazni_meduspr, wrp->izlazni_meduspr);
+        sem_post(&wrp->ulazni_bsem[wrp->dretva_id]);
+
+        sem_wait(&wrp->izlazni_bsem[ulaz.tip]);
+        obradi_ulaz(&ulaz, wrp->izlazni_meduspr);
+        printf(ANSI_COLOR_RED "Radna dretva %d stavlja %c u meduspremnik %d" ANSI_COLOR_RESET "\n", wrp->dretva_id, ulaz.podatak, ulaz.tip);
+        ispis_meduspremnika(wrp->ulazni_meduspr, wrp->izlazni_meduspr);
+        sem_post(&wrp->izlazni_bsem[ulaz.tip]);
+        sem_post(&wrp->izlazni_osem[ulaz.tip]);
     }
     pthread_exit(NULL);
 }
@@ -166,12 +198,16 @@ void *citaj_obradi_izlazna(void *arg) {
     std::unique_ptr<dretve_args> wrp( static_cast<dretve_args*>(arg) );
     while (1)
     {
-        if(!wrp->ulazni_meduspr[wrp->dretva_id].prazan()) {
-            sleep(rand() % 2 + 2);
-            dohvati_ulaz(&ulaz, &wrp->ulazni_meduspr[wrp->dretva_id]);
-            printf("Izlazna dretva %d: dohvati i ispisi %c", wrp->dretva_id, ulaz.podatak);
-            ispis_meduspremnika(wrp->ulazni_meduspr, wrp->izlazni_meduspr);
-        }
+        sem_wait(&wrp->izlazni_osem[wrp->dretva_id]);      
+        sem_wait(&wrp->izlazni_bsem[wrp->dretva_id]);  
+        dohvati_ulaz(&ulaz, &wrp->izlazni_meduspr[wrp->dretva_id], wrp->dretva_id, wrp->dretva_tip);
+        printf(ANSI_COLOR_GREEN "Izlazna dretva %d dohvaca %c iz meduspremnika %d" ANSI_COLOR_RESET "\n", wrp->dretva_id, ulaz.podatak, wrp->dretva_id);
+        ispis_meduspremnika(wrp->ulazni_meduspr, wrp->izlazni_meduspr);
+        sem_post(&wrp->izlazni_bsem[wrp->dretva_id]);
+
+        sleep(rand() % 2 + 2);
+        printf(ANSI_COLOR_GREEN "Izlazna dretva %d ispisuje %c" ANSI_COLOR_RESET "\n", wrp->dretva_id, ulaz.podatak);
+        ispis_meduspremnika(wrp->ulazni_meduspr, wrp->izlazni_meduspr);
     }
     pthread_exit(NULL);
 }
@@ -188,56 +224,76 @@ int main(int argc, char *argv[]) {
     int br_izlaznih_dretvi = atoi(argv[3]);
     ulazni_meduspr_br = br_radnih_dretvi;
     izlazni_meduspr_br = br_izlaznih_dretvi;
+    int velicina_spremnika = 6;
 
-
-    Meduspremnik *ulazni_meduspremnik = (Meduspremnik*)malloc(sizeof(Meduspremnik) * ulazni_meduspr_br);
+    Meduspremnik ulazni_meduspremnik[ulazni_meduspr_br];
     for (int i = 0; i < ulazni_meduspr_br; i++)
     {
-        ulazni_meduspremnik[i] = Meduspremnik(6);
+        ulazni_meduspremnik[i].Init(velicina_spremnika);
     }
-    Meduspremnik *izlazni_meduspremnik = (Meduspremnik*)malloc(sizeof(Meduspremnik) * izlazni_meduspr_br);
+    Meduspremnik izlazni_meduspremnik[izlazni_meduspr_br];
     for (int i = 0; i < izlazni_meduspr_br; i++)
     {
-        izlazni_meduspremnik[i] = Meduspremnik(6);
+        izlazni_meduspremnik[i].Init(velicina_spremnika);
     }
+
     printf("Pocetak:\n");
     ispis_meduspremnika(ulazni_meduspremnik, izlazni_meduspremnik);
 
-    sem_t ulazni_semafor[ulazni_meduspr_br];
-    sem_t izlazni_semafor[izlazni_meduspr_br];
 
+    sem_t ulazni_bsem[ulazni_meduspr_br];
+    sem_t izlazni_bsem[izlazni_meduspr_br];
+    sem_t ulazni_osem[ulazni_meduspr_br];
+    sem_t izlazni_osem[izlazni_meduspr_br];
+    for (int i = 0; i < ulazni_meduspr_br; i++)
+    {
+        sem_init(&ulazni_bsem[i], 0, 1);
+        sem_init(&ulazni_osem[i], 0, 0);
+    }
+    for (int i = 0; i < izlazni_meduspr_br; i++)
+    {
+        sem_init(&izlazni_bsem[i], 0, 1);
+        sem_init(&izlazni_osem[i], 0, 0);
+    }
+    
+    struct dretve_args *args;
     pthread_t ulazne_dretve[br_ulaznih_dretvi];
     for (int i = 0; i < br_ulaznih_dretvi; i++)
     {
-        struct dretve_args *args;
-        args = (dretve_args*)malloc(sizeof(dretve_args));
+        args = new dretve_args;
         args->dretva_id = i;
         args->dretva_tip = 0;
         args->ulazni_meduspr = ulazni_meduspremnik;
         args->izlazni_meduspr = izlazni_meduspremnik;
+        args->ulazni_bsem = ulazni_bsem;
+        args->ulazni_osem = ulazni_osem;
         pthread_create(&ulazne_dretve[i], NULL, &citaj_obradi_ulazna, args);
-    }  
+    }
+    sleep(15);
     pthread_t radne_dretve[br_radnih_dretvi];
-    for (int i = 0; i < br_ulaznih_dretvi; i++)
+    for (int i = 0; i < br_radnih_dretvi; i++)
     {
-        struct dretve_args *args;
-        args = (dretve_args*)malloc(sizeof(dretve_args));\
+        args = new dretve_args;
         args->dretva_id = i;
         args->dretva_tip = 1;
         args->ulazni_meduspr = ulazni_meduspremnik;
         args->izlazni_meduspr = izlazni_meduspremnik;
+        args->ulazni_bsem = ulazni_bsem;
+        args->izlazni_bsem = izlazni_bsem;
+        args->ulazni_osem = ulazni_osem;
+        args->izlazni_osem = izlazni_osem;
         pthread_create(&radne_dretve[i], NULL, &citaj_obradi_radna, args);
     }    
     pthread_t izlazne_dretve[br_izlaznih_dretvi];
     for (int i = 0; i < br_izlaznih_dretvi; i++)
     {
-        struct dretve_args *args;
-        args = (dretve_args*)malloc(sizeof(dretve_args));
+        args = new dretve_args;
         args->dretva_id = i;
         args->dretva_tip = 2;
         args->ulazni_meduspr = ulazni_meduspremnik;
         args->izlazni_meduspr = izlazni_meduspremnik;
-        args->izlazni_meduspr = nullptr;
+        args->izlazni_bsem = izlazni_bsem;
+        args->izlazni_osem = izlazni_osem;
         pthread_create(&izlazne_dretve[i], NULL, &citaj_obradi_izlazna, args);
     }
     
@@ -246,7 +302,7 @@ int main(int argc, char *argv[]) {
     {
         pthread_join(ulazne_dretve[i], NULL);
     }
-    for (int i = 0; i < br_ulaznih_dretvi; i++)
+    for (int i = 0; i < br_radnih_dretvi; i++)
     {
         pthread_join(radne_dretve[i], NULL);
     }

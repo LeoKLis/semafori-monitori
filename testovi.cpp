@@ -34,6 +34,16 @@ public:
         }
     }
 
+    void Init(int velicina){
+        this->velicina = velicina;
+        pisi_ptr = citaj_ptr = -1;
+        polje = new char[velicina];
+        for (int i = 0; i < velicina; i++)
+        {
+            polje[i] = 45;
+        }
+    }
+
     void pisi(char podatak)
     {
         if (pisi_ptr == -1)
@@ -83,14 +93,32 @@ public:
 };
 
 struct radne_dretve_args {
-    Meduspremnik ms1;
+    Meduspremnik *ms1;
     Meduspremnik *ms2;
 };
 
+void ispis_meduspremnika(Meduspremnik *ulazni, Meduspremnik *izlazni) {
+    printf("UMS: ");
+    for (int i = 0; i < 6; i++)
+    {
+        ulazni[i].print();
+        printf(" ");
+    }
+    printf("\n");
+    printf("IMS: ");
+    for (int i = 0; i < 3; i++)
+    {
+        izlazni[i].print();
+        printf(" ");
+    }
+    printf("\n");
+    
+}
+
 void *banana(void *arg){
     std::unique_ptr<radne_dretve_args> wrp( static_cast<radne_dretve_args*>(arg) );
-    wrp->ms1.pisi('a');
-    wrp->ms1.print();
+    wrp->ms1[0].pisi('a');
+    wrp->ms1[0].print();
 
     printf("\n");
 
@@ -109,31 +137,86 @@ void *banana(void *arg){
     wrp->ms2[1].pisi('i');
     wrp->ms2[1].print();
 
+    printf("\n");
+
+    ispis_meduspremnika(wrp->ms1, wrp->ms2);
+
     pthread_exit(NULL);
+}
+
+void *kokos(void *arg){
+    std::unique_ptr<radne_dretve_args> wrp(static_cast<radne_dretve_args*>(arg));
+    wrp->ms1[1].pisi('x');
+    wrp->ms1[1].print();
+
+    printf("\n");
+
+    wrp->ms2[2].pisi('p');
+    wrp->ms2[2].pisi('r');
+    wrp->ms2[2].pisi('v');
+    wrp->ms2[2].pisi('i');
+    wrp->ms2[2].print();
+    
+    printf("\n");
+
+    wrp->ms1[5].pisi('d');
+    wrp->ms1[5].pisi('r');
+    wrp->ms1[5].pisi('u');
+    wrp->ms1[5].pisi('g');
+    wrp->ms1[5].pisi('i');
+    wrp->ms1[5].print();
+
+    printf("\n");
+
+    ispis_meduspremnika(wrp->ms1, wrp->ms2);
+
+    pthread_exit(NULL);
+}
+
+void charinit(char *chs, int velicina){
+    chs = (char*) realloc(chs, velicina);
 }
 
 int main()
 {
-    Meduspremnik *ulazni_meduspremnik = (Meduspremnik*)malloc(sizeof(Meduspremnik) * 6);
+    /* Meduspremnik ulazni_meduspremnik[6];
     for (int i = 0; i < 6; i++)
     {
-        ulazni_meduspremnik[i] = Meduspremnik(6);
+        ulazni_meduspremnik[i].Init(6);
     }
-    Meduspremnik *izlazni_meduspremnik = (Meduspremnik*)malloc(sizeof(Meduspremnik) * 3);
+    Meduspremnik izlazni_meduspremnik[3];
     for (int i = 0; i < 3; i++)
     {
-        izlazni_meduspremnik[i] = Meduspremnik(6);
+        izlazni_meduspremnik[i].Init(6);
     }
 
     struct radne_dretve_args *args;
-    args = (radne_dretve_args*)malloc(sizeof(radne_dretve_args));
-    args->ms1 = ulazni_meduspremnik[1];
+    args = new radne_dretve_args;
+    args->ms1 = ulazni_meduspremnik;
     args->ms2 = izlazni_meduspremnik;
+    pthread_t thr1;
+    pthread_create(&thr1, NULL, &banana, args);
 
-    pthread_t thr;
-    pthread_create(&thr, NULL, &banana, args);
+    args = new radne_dretve_args;
+    args->ms1 = ulazni_meduspremnik;
+    args->ms2 = izlazni_meduspremnik;
+    pthread_t thr2;
+    pthread_create(&thr2, NULL, &kokos, args);
 
-    pthread_join(thr, NULL);
+
+    pthread_join(thr2, NULL);
+    pthread_join(thr2, NULL); */
+
+    char *arr = (char*) malloc(1);
+
+    charinit(arr, 6);
+
+    for (int i = 0; i < 6; i++)
+    {
+        arr[i] = 'a';
+        printf("%c", arr[i]);
+    }
+    
 
     return 0;
 
