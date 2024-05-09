@@ -1,5 +1,5 @@
-// format: {BasedOnStyle: Google, UseTab: Never, IndentWidth: 8, TabWidth: 8,
-// CloumnLimit: 80, BreakBeforeBraces: Stroustrup,
+// VS Code format: {BasedOnStyle: Google, UseTab: Never, IndentWidth: 8,
+// TabWidth: 8, CloumnLimit: 80, BreakBeforeBraces: Stroustrup,
 // AllowShortIfStatementsOnASingleLine: false}
 
 #include <pthread.h>
@@ -10,10 +10,8 @@
 
 #define ANSI_COLOR_RED "\x1b[31m"
 #define ANSI_COLOR_GREEN "\x1b[32m"
-#define ANSI_COLOR_YELLOW "\x1b[33m"
 #define ANSI_COLOR_BLUE "\x1b[34m"
 #define ANSI_COLOR_MAGENTA "\x1b[35m"
-#define ANSI_COLOR_CYAN "\x1b[36m"
 #define ANSI_COLOR_RESET "\x1b[0m"
 
 struct ListElement {
@@ -139,8 +137,8 @@ pthread_cond_t red_brisaca;
 int br_citaca_ceka = 0;
 int br_citaca_cita = 0;
 
-int br_brisaca_brise = 0;
 int br_brisaca_ceka = 0;
+int br_brisaca_brise = 0;
 
 int br_pisaca_ceka = 0;
 int br_pisaca_pise = 0;
@@ -148,9 +146,7 @@ int br_pisaca_pise = 0;
 LinkedList *list = new LinkedList();
 
 enum tip_dretve { PISAC, CITAC, BRISAC };
-
 enum tip_radnje { ZELI, KRECE, ZAVRSAVA, OTKAZANO };
-
 void ispis(tip_dretve td, tip_radnje tr, int *broj_tipa_dretve, int index,
            int vrijednost)
 {
@@ -379,7 +375,7 @@ void *dretva_pisac(void *arg)
 
                 sleep(rand() % 6 + 5);
                 list->umetni(podatak);
-                if (list->get_velicina() == 3) {
+                if (list->get_velicina() == 6) {
                         sem_post(&ceka_x_elemenata);
                 }
 
@@ -394,7 +390,7 @@ void *dretva_pisac(void *arg)
                 ispis(PISAC, ZAVRSAVA, (int *)arg, 0, podatak);
                 pthread_mutex_unlock(&monitor);
 
-                sleep(rand() % 6 + 5);
+                sleep(rand() % 4 + 5);
         }
         pthread_exit(NULL);
 }
@@ -426,15 +422,17 @@ void *dretva_citac(void *arg)
                 if (br_citaca_cita == 0 && br_brisaca_ceka > 0) {
                         pthread_cond_signal(&red_brisaca);
                 }
-                if(moze_citati){
-                    ispis(CITAC, ZAVRSAVA, (int *)arg, index, list->citaj(index));
+                if (moze_citati) {
+                        ispis(CITAC, ZAVRSAVA, (int *)arg, index,
+                              list->citaj(index));
                 }
                 else {
-                    ispis(CITAC,OTKAZANO, (int *)arg, index, list->citaj(index));
+                        ispis(CITAC, OTKAZANO, (int *)arg, index,
+                              list->citaj(index));
                 }
                 pthread_mutex_unlock(&monitor);
-                
-                sleep(rand() % 6 + 5);
+
+                sleep(rand() % 4 + 5);
         }
         pthread_exit(NULL);
 }
